@@ -1,0 +1,35 @@
+# gateway.yaml — Fabric-SDK Gateway configuration
+# Place this file alongside fabric-gateway start
+
+port: 7340
+redis_url: "redis://localhost:6379"
+
+# Keepalive timing (ADR-002 §11)
+keepalive_interval_ms: 30000      # fabrics must ping every 30s
+keepalive_miss_threshold: 2       # 2 missed → degraded
+keepalive_dead_threshold: 3       # 3 missed → withdrawn
+
+# DNS resolution cache TTL seconds (ADR-002 §12)
+dns_cache_ttl_s: 300
+
+# Minimum confidence before routing to local-llm lane
+# Below this → escalate to Claude
+default_confidence_floor: 0.7
+
+# Firewall layer (ADR-001 L2)
+firewall:
+  enabled: true
+  blocked_prefixes:
+    - "0.0.0.0/0"    # reserved — Claude's default route only
+  # Additional PII regex patterns (beyond built-in defaults)
+  pii_patterns: []
+  # Additional injection patterns
+  injection_patterns: []
+
+# Claude escalation (default route — used when no fabric resolves)
+claude:
+  model: "claude-sonnet-4-20250514"
+  max_tokens: 4096
+  # api_key: set via ANTHROPIC_API_KEY env var
+
+log_level: "info"

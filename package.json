@@ -1,0 +1,37 @@
+{
+  "name": "@fabric-sdk/gateway",
+  "version": "0.1.0",
+  "description": "Fabric-SDK gateway — BGP-style route reflector, F-RIB, unicast DNS resolver, interceptor, and firewall for autonomous fabric agents",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "fabric-gateway": "./bin/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "lint": "eslint src --ext .ts",
+    "test": "vitest run"
+  },
+  "keywords": ["fabric-sdk", "mcp", "gateway", "ai-agents", "orchestration"],
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "fastify": "^4.28.0",
+    "ioredis": "^5.3.2",
+    "axios": "^1.7.0",
+    "zod": "^3.23.0",
+    "winston": "^3.13.0",
+    "commander": "^12.0.0",
+    "yaml": "^2.4.0",
+    "dotenv": "^16.4.0",
+    "crypto": "^1.0.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "tsx": "^4.11.0",
+    "@types/node": "^20.0.0",
+    "vitest": "^1.6.0"
+  }
+}
