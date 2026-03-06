@@ -4,29 +4,40 @@ A composable proof-of-concept framework for autonomous fabric agents, built on t
 
 ## Network Topology
 
+Each fabric is a self-contained autonomous system -- MCP server, AIANA memory, local LLM, and workers. Fabrics operate independently. The gateway is optional connective tissue for cross-fabric resolution; it is not a dependency.
+
 ```
-Claude (eBGP upstream / transit provider)
-         |
-    +----+----+
-    | Firewall| (border router - policy enforcement)
-    +----+----+
-         |
-    +----+------------------------------------+
-    |         Gateway (Route Reflector)       |
-    |   - Fabric RIB                          |
-    |   - Interceptor (path selection)        |
-    |   - DNS (unicast resolution)            |
-    |   - Redis (route cache)                 |
-    +----+----------+----------+--------------+
-         |          |          |
-    +----+---+ +----+---+ +---+----+
-    |Fabric  | |Fabric  | |Fabric  |   (AS / edge routers)
-    |git-steer| |SOCIAL  | |n8n     |
-    +----+---+ +----+---+ +---+----+
-         |          |          |
-    +----+---+ +----+---+ +---+----+
-    |Workers | |Workers | |Workers |   (end hosts)
-    +--------+ +--------+ +--------+
+                    Claude (eBGP upstream / AS65000 / transit provider)
+                       |
+                  +----+----+
+                  | Firewall| (L2 - border router / policy enforcement)
+                  +----+----+
+                       |
+    +------------------+------------------+
+    |          Gateway (Route Reflector)   |
+    |   - Fabric RIB                      |
+    |   - Interceptor (path selection)    |
+    |   - DNS (unicast resolution)        |
+    |   - Redis (route cache)             |
+    +--------+----------+----------+------+
+             |          |          |
+    +--------+--+ +-----+----+ +--+--------+
+    | Fabric    | | Fabric   | | Fabric    |  (autonomous systems)
+    | git-steer | | SOCIAL   | | n8n       |
+    | AS65001   | | AS65002  | | AS65004   |
+    |           | |          | |           |
+    | +-------+ | | +------+ | | +-------+ |
+    | | MCP   | | | | MCP  | | | | MCP   | |
+    | +-------+ | | +------+ | | +-------+ |
+    | | AIANA | | | | AIANA| | | | AIANA | |
+    | +-------+ | | +------+ | | +-------+ |
+    | | LLM   | | | | LLM  | | | | LLM   | |
+    | +-------+ | | +------+ | | +-------+ |
+    +--------+--+ +-----+----+ +--+--------+
+             |          |          |
+    +--------+--+ +-----+----+ +--+--------+
+    |  Workers  | | Workers  | |  Workers  |  (L7 / end hosts)
+    +--------+--+ +-----+----+ +--+--------+
 ```
 
 ## BGP Routing Example
