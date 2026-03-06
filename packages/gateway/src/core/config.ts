@@ -28,21 +28,22 @@ const DEFAULTS: GatewayConfig = {
 export function loadConfig(path?: string): GatewayConfig {
   const configPath = path ?? process.env.GATEWAY_CONFIG ?? './gateway.yaml';
 
-  if (!existsSync(configPath)) {
-    return DEFAULTS;
+  let merged: GatewayConfig;
+
+  if (existsSync(configPath)) {
+    const raw    = readFileSync(configPath, 'utf-8');
+    const parsed = parse(raw) as Partial<GatewayConfig>;
+    merged = {
+      ...DEFAULTS,
+      ...parsed,
+      firewall: { ...DEFAULTS.firewall, ...parsed.firewall },
+      claude:   { ...DEFAULTS.claude,   ...parsed.claude   },
+    };
+  } else {
+    merged = { ...DEFAULTS };
   }
 
-  const raw    = readFileSync(configPath, 'utf-8');
-  const parsed = parse(raw) as Partial<GatewayConfig>;
-
-  const merged: GatewayConfig = {
-    ...DEFAULTS,
-    ...parsed,
-    firewall: { ...DEFAULTS.firewall, ...parsed.firewall },
-    claude:   { ...DEFAULTS.claude,   ...parsed.claude   },
-  };
-
-  // Env var overrides
+  // Env var overrides (always applied)
   if (process.env.PORT) merged.port = parseInt(process.env.PORT, 10);
   if (process.env.REDIS_URL) merged.redis_url = process.env.REDIS_URL;
   if (process.env.LOG_LEVEL) merged.log_level = process.env.LOG_LEVEL as GatewayConfig['log_level'];

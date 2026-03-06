@@ -19,15 +19,31 @@ export async function start(configPath?: string): Promise<void> {
   logger.info('[Gateway] Starting Fabric-SDK Gateway v0.1.0');
 
   // ── Redis ────────────────────────────────────────────────────────
-  const redis = new Redis(config.redis_url, {
-    lazyConnect: true,
-    retryStrategy: (times: number) => Math.min(times * 200, 5000),
+  // Parse redis URL to host/port
+  const redisUrl = new URL(config.redis_url);
+  const redisHost = redisUrl.hostname;
+  const redisPort = parseInt(redisUrl.port || '6379', 10);
+  logger.info(`[Redis] Connecting to ${redisHost}:${redisPort} (from ${config.redis_url})`);
+
+  const redis = new Redis({
+    host: redisHost,
+    port: redisPort,
+    retryStrategy: (times: number) => Math.min(times * 500, 5000),
+    maxRetriesPerRequest: null,
+    connectTimeout: 10000,
   });
 
-  redis.on('error', (err: Error) => logger.error(`[Redis] ${err.message}`));
-  redis.on('connect', ()  => logger.info('[Redis] Connected'));
+  redis.on('error', (err: Error) => logger.error(`[Redis] ${err.message || (err as any).code || 'unknown error'}`));
 
-  await redis.connect();
+  // Wait for initial connection
+  await new Promise<void>((resolve, reject) => {
+    redis.once('connect', () => {
+      logger.info('[Redis] Connected');
+      resolve();
+    });
+    redis.once('end', () => reject(new Error('Redis connection ended before connecting')));
+    setTimeout(() => reject(new Error('Redis connection timeout (30s)')), 30000);
+  });
 
   // ── Layer instantiation (bottom → top, OSI L2 → L4) ─────────────
   const frib        = new FRIB(redis);
