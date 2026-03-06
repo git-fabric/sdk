@@ -1,0 +1,32 @@
+{
+  "name": "@fabric-sdk/client",
+  "version": "0.1.0",
+  "description": "Fabric-SDK client -- register, keepalive, intercept, and local LLM inference for fabric agents",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./ollama": "./dist/ollama/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run"
+  },
+  "keywords": ["fabric-sdk", "mcp", "client", "ollama", "ai-agents"],
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.7.0"
+  },
+  "peerDependencies": {
+    "@fabric-sdk/gateway": "^0.1.0"
+  },
+  "peerDependenciesMeta": {
+    "@fabric-sdk/gateway": { "optional": true }
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/node": "^20.0.0",
+    "vitest": "^1.6.0"
+  }
+}
