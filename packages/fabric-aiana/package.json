@@ -1,0 +1,29 @@
+{
+  "name": "@fabric-sdk/fabric-aiana",
+  "version": "0.1.0",
+  "description": "Fabric-SDK AIANA -- semantic memory fabric, Qdrant-backed, SDK-native",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "fabric-aiana": "./bin/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "test": "vitest run"
+  },
+  "keywords": ["fabric-sdk", "aiana", "memory", "qdrant", "mcp"],
+  "license": "MIT",
+  "dependencies": {
+    "@fabric-sdk/client": "^0.1.0",
+    "openai": "^4.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "tsx": "^4.11.0",
+    "@types/node": "^20.0.0",
+    "vitest": "^1.6.0"
+  }
+}
