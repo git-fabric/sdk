@@ -93,7 +93,7 @@ async function main(): Promise<void> {
   }
 
   // Simple HTTP server for MCP tool calls
-  const server = Bun?.serve ?? null;
+  const server = (globalThis as any).Bun?.serve ?? null;
   if (!server) {
     // Node.js path
     const { createServer } = await import('http');

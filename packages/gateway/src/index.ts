@@ -3,7 +3,7 @@
 // Wires: Redis → F-RIB → Firewall → DNS → Interceptor → Fastify
 
 import 'dotenv/config';
-import Redis from 'ioredis';
+import { Redis } from 'ioredis';
 import { loadConfig } from './core/config.js';
 import { logger } from './core/logger.js';
 import { FRIB } from './frib/index.js';
@@ -21,10 +21,10 @@ export async function start(configPath?: string): Promise<void> {
   // ── Redis ────────────────────────────────────────────────────────
   const redis = new Redis(config.redis_url, {
     lazyConnect: true,
-    retryStrategy: (times) => Math.min(times * 200, 5000),
+    retryStrategy: (times: number) => Math.min(times * 200, 5000),
   });
 
-  redis.on('error', (err) => logger.error(`[Redis] ${err.message}`));
+  redis.on('error', (err: Error) => logger.error(`[Redis] ${err.message}`));
   redis.on('connect', ()  => logger.info('[Redis] Connected'));
 
   await redis.connect();

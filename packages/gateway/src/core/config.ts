@@ -35,10 +35,17 @@ export function loadConfig(path?: string): GatewayConfig {
   const raw    = readFileSync(configPath, 'utf-8');
   const parsed = parse(raw) as Partial<GatewayConfig>;
 
-  return {
+  const merged: GatewayConfig = {
     ...DEFAULTS,
     ...parsed,
     firewall: { ...DEFAULTS.firewall, ...parsed.firewall },
     claude:   { ...DEFAULTS.claude,   ...parsed.claude   },
   };
+
+  // Env var overrides
+  if (process.env.PORT) merged.port = parseInt(process.env.PORT, 10);
+  if (process.env.REDIS_URL) merged.redis_url = process.env.REDIS_URL;
+  if (process.env.LOG_LEVEL) merged.log_level = process.env.LOG_LEVEL as GatewayConfig['log_level'];
+
+  return merged;
 }

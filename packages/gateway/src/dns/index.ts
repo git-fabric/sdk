@@ -5,7 +5,7 @@
 
 import axios from 'axios';
 import { createHash } from 'crypto';
-import Redis from 'ioredis';
+import { Redis } from 'ioredis';
 import type {
   DNSQuery, DNSResponse, DNSResult, FRIBEntry,
   RoutingLane, GatewayConfig

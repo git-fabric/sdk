@@ -3,7 +3,7 @@
 // BGP-style routing table for fabric knowledge prefixes
 // Backed by Redis — survives gateway restarts
 
-import Redis from 'ioredis';
+import { Redis } from 'ioredis';
 import { createHash } from 'crypto';
 import type {
   FRIBEntry, FabricSession, FabricRegistration,
@@ -83,11 +83,13 @@ export class FRIB {
       logger.warn(`[F-RIB] Prefix takeover: ${route.prefix} from ${existing.fabric_id} → ${reg.fabric_id} (higher pref)`);
     }
 
-    const workerStatuses = reg.worker_pool.workers.map(w => w.status);
-    const healthyCount   = workerStatuses.filter(s => s === 'healthy').length;
+    const workerStatuses = reg.worker_pool.workers.map((w: { status: string }) => w.status);
+    const healthyCount   = workerStatuses.filter((s: string) => s === 'healthy').length;
+    const total          = Math.max(reg.worker_pool.total, 1);
     const workerHealth: WorkerStatus =
+      reg.worker_pool.workers.length === 0 ? 'healthy' :
       healthyCount === 0 ? 'failed' :
-      healthyCount / reg.worker_pool.total < 0.5 ? 'degraded' : 'healthy';
+      healthyCount / total < 0.5 ? 'degraded' : 'healthy';
 
     const entry: FRIBEntry = {
       fabric_id:        reg.fabric_id,
@@ -285,14 +287,14 @@ export class FRIB {
     const keys = await this.redis.keys(`${FRIB_PREFIX}*`);
     if (!keys.length) return [];
     const vals = await this.redis.mget(...keys);
-    return vals.filter(Boolean).map(v => JSON.parse(v!) as FRIBEntry);
+    return vals.filter(Boolean).map((v: string | null) => JSON.parse(v!) as FRIBEntry);
   }
 
   async allSessions(): Promise<FabricSession[]> {
     const keys = await this.redis.keys(`${SESSION_PREFIX}*`);
     if (!keys.length) return [];
     const vals = await this.redis.mget(...keys);
-    return vals.filter(Boolean).map(v => JSON.parse(v!) as FabricSession);
+    return vals.filter(Boolean).map((v: string | null) => JSON.parse(v!) as FabricSession);
   }
 
   // ─── Audit ─────────────────────────────────────────────────────
@@ -304,7 +306,7 @@ export class FRIB {
 
   async getAuditLog(limit = 100): Promise<AuditEntry[]> {
     const raw = await this.redis.lrange(AUDIT_KEY, 0, limit - 1);
-    return raw.map(r => JSON.parse(r) as AuditEntry);
+    return raw.map((r: string) => JSON.parse(r) as AuditEntry);
   }
 
   private auditId(): string {
