@@ -1,6 +1,14 @@
 # Fabric-SDK
 
-A composable proof-of-concept framework for autonomous fabric agents, built on the success of cortex, git-fabric, and fabric-forge. BGP-style routing, local LLM inference, and Claude escalation as the default route of last resort.
+**Stop paying Claude to answer questions your own systems already know.**
+
+The fabric ecosystem -- git-steer, FABRIC/SOCIAL, AIANA, and others -- has accumulated a significant knowledge base across Qdrant collections, Redis state, and indexed outcomes. Every time Claude is asked something that's already in that knowledge base, API credits are burned for what is essentially a lookup operation.
+
+The Fabric-SDK is the routing layer that makes that decision: does the fabric already know this, or does it genuinely need Claude? The BGP model, the three-lane routing, the DNS resolution -- all in service of one thing: Claude only gets called when nobody else can answer.
+
+The system gets smarter over time. Every time Claude does get called, AIANA indexes the outcome. Next time the same pattern comes up, it routes locally. The Claude escalation rate trends toward zero for known problem domains.
+
+A proof-of-concept framework built on the success of cortex, git-fabric, and fabric-forge.
 
 ## Network Topology
 
