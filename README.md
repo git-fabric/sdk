@@ -1,17 +1,59 @@
 # Fabric-SDK
 
-A composable framework for autonomous fabric agents. BGP-style routing, local LLM inference, and Claude escalation as the default route of last resort.
+A composable proof-of-concept framework for autonomous fabric agents, built on the success of cortex, git-fabric, and fabric-forge. BGP-style routing, local LLM inference, and Claude escalation as the default route of last resort.
 
-## Architecture
+## Network Topology
 
 ```
-L7  Worker Agents       -- execute domain tasks, fabric-supervised only
-L6  MCP Protocol        -- tool interface contract
-L5  AIANA               -- session memory (per-fabric)
-L4  Interceptor + DNS   -- path selection, unicast resolution
-L3  Gateway             -- F-RIB, route reflector, Redis cache
-L2  Firewall            -- policy, injection detection, PII scrub
-L1  Tailscale           -- zero-trust transport
+Claude (eBGP upstream / transit provider)
+         |
+    +----+----+
+    | Firewall| (border router - policy enforcement)
+    +----+----+
+         |
+    +----+------------------------------------+
+    |         Gateway (Route Reflector)       |
+    |   - Fabric RIB                          |
+    |   - Interceptor (path selection)        |
+    |   - DNS (unicast resolution)            |
+    |   - Redis (route cache)                 |
+    +----+----------+----------+--------------+
+         |          |          |
+    +----+---+ +----+---+ +---+----+
+    |Fabric  | |Fabric  | |Fabric  |   (AS / edge routers)
+    |git-steer| |SOCIAL  | |n8n     |
+    +----+---+ +----+---+ +---+----+
+         |          |          |
+    +----+---+ +----+---+ +---+----+
+    |Workers | |Workers | |Workers |   (end hosts)
+    +--------+ +--------+ +--------+
+```
+
+## BGP Routing Example
+
+```
+worker finds CVE
+  -> reports to git-steer fabric (internal, no routing needed)
+  -> git-steer checks local LLM + AIANA
+      -> known pattern? resolve locally, worker executes
+      -> unknown? git-steer queries gateway DNS
+          -> gateway checks RIB
+              -> another fabric knows? unicast, retrieve context
+              -> nobody knows? default route -> Claude
+  -> resolution flows back down to worker
+  -> worker executes
+```
+
+## Fabric-SDK OSI Model
+
+```
+Layer 7 - Application    | Fabric apps (git-steer, FABRIC/SOCIAL, etc.)
+Layer 6 - Presentation   | MCP protocol (serialization, schema, tool contracts)
+Layer 5 - Session        | AIANA (conversation state, memory continuity)
+Layer 4 - Transport      | Interceptor + DNS resolver (routing decisions, unicast dispatch)
+Layer 3 - Network        | Gateway (topology, fabric registry, resolution cache)
+Layer 2 - Data Link      | Firewall (policy enforcement, prompt injection, PII, auth)
+Layer 1 - Physical       | Tailscale (zero trust transport, k3s mesh)
 ```
 
 Claude is `0.0.0.0/0` -- the default route with lowest local preference.
@@ -37,25 +79,11 @@ Claude is `0.0.0.0/0` -- the default route with lowest local preference.
 - [x] Monorepo structure with workspaces, shared tsconfig, vitest
 - [x] Tests: firewall, F-RIB, interceptor, client, Ollama provider
 
-### Phase 3 -- Retrofit: UP NEXT
-- [ ] git-steer: register with gateway, add Ollama local inference, define knowledge prefixes
-- [ ] gitops-alert-resolver: first net-new fabric built fully on SDK scaffold
-- [ ] FABRIC/SOCIAL: retrofit content atomization pipeline to SDK worker model
-
-### Phase 4 -- Operate: PLANNED
-- [ ] Metrics: Claude escalation rate, local hit rate, routing latency per fabric
+### Phase 3 -- Validate: UP NEXT
+- [ ] Integration testing: gateway + Redis + test fabric, full intercept -> DNS -> route -> respond flow
+- [ ] Metrics: Claude escalation rate, local hit rate, routing latency
 - [ ] Threshold tuning: adjust confidence thresholds based on real routing data
 - [ ] AIANA feedback loop: resolved Claude answers indexed back into fabric knowledge base
-
-## What's Next
-
-Phase 3 is the validation phase -- retrofitting real fabrics onto the SDK to prove the contracts work under load. The priority order:
-
-1. **git-steer** -- already the most mature fabric and the pattern origin. Add `@fabric-sdk/client` dependency, register on startup, wire Ollama for the local-llm lane, define `fabric.cve`, `fabric.github`, `fabric.repo` prefixes.
-
-2. **Integration testing** -- stand up gateway + Redis, register a test fabric, run full intercept -> DNS -> route -> respond flow end to end.
-
-3. **gitops-alert-resolver** -- first fabric built from `create-fabric-app` scaffold. Validates the template and developer experience.
 
 ## Quick Start
 
