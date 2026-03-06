@@ -18,11 +18,44 @@ Claude is `0.0.0.0/0` -- the default route with lowest local preference.
 
 ## Packages
 
-| Package | Description |
-|---------|-------------|
-| [`@fabric-sdk/gateway`](packages/gateway) | BGP-style route reflector. F-RIB, unicast DNS resolver, interceptor, firewall. |
-| [`@fabric-sdk/client`](packages/client) | Client library for fabrics. Registration, keepalive, intercept, Ollama integration. |
-| [`create-fabric-app`](packages/create-fabric) | CLI to scaffold a new fabric project. |
+| Package | Description | Status |
+|---------|-------------|--------|
+| [`@fabric-sdk/gateway`](packages/gateway) | BGP-style route reflector. F-RIB, unicast DNS resolver, interceptor, firewall. | Scaffold complete |
+| [`@fabric-sdk/client`](packages/client) | Client library for fabrics. Registration, keepalive, intercept, Ollama integration. | Scaffold complete |
+| [`create-fabric-app`](packages/create-fabric) | CLI to scaffold a new fabric project with templates. | Scaffold complete |
+
+## Project Status
+
+### Phase 1 -- Spec: COMPLETE
+- [x] ADR-001: Framework architecture, OSI mapping, BGP routing model
+- [x] ADR-002: Worker contract, fabric registration protocol, F-RIB spec
+
+### Phase 2 -- Scaffold: COMPLETE
+- [x] Gateway skeleton: F-RIB, registration, keepalive, DNS resolver, interceptor, firewall, audit log
+- [x] Client library: FabricClient, SessionManager, OllamaProvider
+- [x] `create-fabric-app` CLI with project templates
+- [x] Monorepo structure with workspaces, shared tsconfig, vitest
+- [x] Tests: firewall, F-RIB, interceptor, client, Ollama provider
+
+### Phase 3 -- Retrofit: UP NEXT
+- [ ] git-steer: register with gateway, add Ollama local inference, define knowledge prefixes
+- [ ] gitops-alert-resolver: first net-new fabric built fully on SDK scaffold
+- [ ] FABRIC/SOCIAL: retrofit content atomization pipeline to SDK worker model
+
+### Phase 4 -- Operate: PLANNED
+- [ ] Metrics: Claude escalation rate, local hit rate, routing latency per fabric
+- [ ] Threshold tuning: adjust confidence thresholds based on real routing data
+- [ ] AIANA feedback loop: resolved Claude answers indexed back into fabric knowledge base
+
+## What's Next
+
+Phase 3 is the validation phase -- retrofitting real fabrics onto the SDK to prove the contracts work under load. The priority order:
+
+1. **git-steer** -- already the most mature fabric and the pattern origin. Add `@fabric-sdk/client` dependency, register on startup, wire Ollama for the local-llm lane, define `fabric.cve`, `fabric.github`, `fabric.repo` prefixes.
+
+2. **Integration testing** -- stand up gateway + Redis, register a test fabric, run full intercept -> DNS -> route -> respond flow end to end.
+
+3. **gitops-alert-resolver** -- first fabric built from `create-fabric-app` scaffold. Validates the template and developer experience.
 
 ## Quick Start
 
@@ -101,8 +134,8 @@ await client.destroy();
 
 ## ADRs
 
-- [ADR-001: Fabric-SDK Architecture](docs/adr-001.md)
-- [ADR-002: Worker Contract + Registration Protocol](docs/adr-002.md)
+- [ADR-001: Fabric-SDK Architecture](docs/adr-001.md) -- OSI mapping, BGP routing, worker model, inference lanes
+- [ADR-002: Worker Contract + Registration Protocol](docs/adr-002.md) -- F-RIB, DNS resolution, keepalive, conflict rules
 
 ## Development
 
