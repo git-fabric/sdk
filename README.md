@@ -77,6 +77,18 @@ Layer 1 - Physical       | Tailscale (zero trust transport, k3s mesh)
 
 Claude is `0.0.0.0/0` -- the default route with lowest local preference.
 
+## Deployment
+
+Deploy the full Fabric-SDK stack with [fabric-forge](https://github.com/git-fabric/fabric-forge):
+
+```bash
+git clone https://github.com/git-fabric/fabric-forge
+cd fabric-forge
+bash forge.sh
+```
+
+One script provisions k3s (k3d on macOS, bare-metal on Linux) and deploys Ollama, Redis, fabric-gateway, and fabric-aiana via Helm charts. See the [fabric-forge README](https://github.com/git-fabric/fabric-forge#readme) for secrets setup and configuration.
+
 ## Packages
 
 | Package | Description | Status |
