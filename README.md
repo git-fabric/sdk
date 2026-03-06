@@ -84,6 +84,7 @@ Claude is `0.0.0.0/0` -- the default route with lowest local preference.
 | [`@fabric-sdk/gateway`](packages/gateway) | BGP-style route reflector. F-RIB, unicast DNS resolver, interceptor, firewall. | Scaffold complete |
 | [`@fabric-sdk/client`](packages/client) | Client library for fabrics. Registration, keepalive, intercept, Ollama integration. | Scaffold complete |
 | [`create-fabric-app`](packages/create-fabric) | CLI to scaffold a new fabric project with templates. | Scaffold complete |
+| [`@fabric-sdk/fabric-aiana`](packages/fabric-aiana) | Semantic memory fabric. Qdrant-backed, 11 MCP tools, AS65005. | Scaffold complete |
 
 ## Project Status
 
