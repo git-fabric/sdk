@@ -6,12 +6,15 @@
 ## Context
 
 The Fabric-SDK has moved from spec → scaffold → live deployment with real cluster
-access. Three industry patterns inform how we should govern development and runtime
+access. Six industry patterns inform how we should govern development and runtime
 behavior going forward:
 
 1. **Spec-Driven Development** — specs are the primary artifact, not code
 2. **Librarian RAG** — fetch on demand, don't pre-embed everything
 3. **Agentic Storage Safety** — immutable versioning, sandboxing, intent validation
+4. **Secure Agent Architecture** — DevSecOps lifecycle, nonhuman identity, least privilege
+5. **Privilege Escalation Prevention** — domain-scoped agency, independent policy enforcement
+6. **Prompt Caching Awareness** — static-first prompt structure, cost-conscious design
 
 This ADR establishes guardrails for both the development process and the runtime
 behavior of the fabric ecosystem.
@@ -147,7 +150,140 @@ or misinterprets could cause real damage.
 
 ---
 
-## 5. Anti-Patterns (Things We Don't Do)
+## 5. Secure Agent Architecture (DevSecOps)
+
+### Problem
+Fabrics are autonomous agents — they perceive context (queries), reason over goals
+(routing, library lookup), and take actions (k8s API calls, git clones, MCP tool calls).
+They operate without human intervention. This is not a chatbot. The paradigm shift from
+deterministic logic to probabilistic systems means we cannot rely on "same input, same
+output." We must shift from code-first to evaluation-first.
+
+### Guardrails
+
+#### 5.1 Agent Development Lifecycle
+Every fabric follows: **Plan → Code → Test → Debug → Deploy → Monitor → Plan**
+
+This is not optional. The monitoring phase feeds back into planning. If a fabric's
+confidence scores drift, if its library hits decline, if its keepalive pattern changes —
+that's a signal to re-plan, not to patch in production.
+
+#### 5.2 DevSecOps — Security Throughout
+Security is not bolted on after deployment. It is present at every stage:
+- **Plan**: spec defines what the fabric can and cannot do (acceptable agency)
+- **Code**: read-only defaults, no hardcoded secrets, prefix-validated routes
+- **Test**: validate that the fabric cannot exceed its spec'd permissions
+- **Deploy**: Helm charts, immutable image tags, Kubernetes RBAC
+- **Monitor**: audit trail on every intercept, route change, and tool call
+
+#### 5.3 Nonhuman Identity
+Each fabric is a nonhuman identity with:
+- **Unique credentials** — session tokens from gateway registration, not shared
+- **Unique AS number** — fabric-k8s is AS65002, fabric-aiana is AS65005
+- **Auditable actions** — every intercept, registration, and keepalive is logged
+  with fabric_id, timestamp, and audit_id
+- Fabrics do NOT share credentials. If fabric-k8s's session expires, fabric-aiana
+  is unaffected. If one fabric is compromised, its blast radius is its own domain.
+
+#### 5.4 Human in the Loop
+- Claude lane is the human-in-the-loop escalation path. When no fabric is confident,
+  the query goes to Claude — the expert, not the automation.
+- Write operations (if ever added) MUST require human approval or an explicit ADR.
+- New fabric deployments require human review of the spec before implementation begins.
+
+---
+
+## 6. Privilege Escalation Prevention
+
+### Problem
+An AI agent with access to a k8s cluster, Proxmox hypervisor, or DNS provider could
+escalate its own privileges if not constrained. A malicious prompt could trick a fabric
+into accessing tools beyond its domain. A misconfigured ClusterRole could expose the
+entire cluster. Privilege inheritance — where a user inherits an agent's elevated
+permissions — is the most dangerous pattern.
+
+### Guardrails
+
+#### 6.1 Least Privilege (Non-Negotiable)
+- Each fabric gets ONLY the permissions it needs for its read-only domain.
+- fabric-k8s: GET/LIST/WATCH on pods, deployments, services, nodes, events, etc.
+  No create, update, delete, exec. Ever. Unless a new ADR is written.
+- fabric-proxmox (future): read-only VM/node/storage status. No start/stop/migrate.
+- The union of user privilege and agent privilege is always the LESSER of the two.
+
+#### 6.2 Independent Policy Decision Point
+- The gateway firewall is the independent policy decision point for routing.
+  Fabrics cannot self-define what prefixes they advertise — the firewall validates
+  that all prefixes start with `fabric.*` and match the fabric's domain.
+- A fabric cannot escalate its own routing priority. The F-RIB enforces local_pref
+  based on health, not on the fabric's self-reported importance.
+- Tool access validation: the `aiana_query` handler in each fabric validates the
+  query against its own topic index. It does not blindly execute arbitrary tool calls.
+
+#### 6.3 Dynamic, Context-Based, Short-Lived Access
+- Gateway session tokens have TTL (300s default). If a fabric stops sending
+  keepalives, its routes degrade and eventually withdraw.
+- DNS cache entries expire (configurable TTL). Stale answers are not served
+  indefinitely.
+- Library git checkouts are ephemeral — cached in `/tmp/fabric-library`, not
+  persisted across pod restarts.
+
+#### 6.4 Prompt Injection Defense
+- The gateway firewall examines route prefixes, not query content — it cannot be
+  prompt-injected because it operates on structured data, not natural language.
+- The `aiana_query` handler uses keyword matching and regex, not LLM interpretation,
+  to decide which tool to call. A prompt injection cannot trick it into calling a
+  tool outside its topic index.
+- Ollama (local LLM) operates on pre-fetched library content, not on user-supplied
+  prompts directly. The fabric controls what context Ollama sees.
+
+#### 6.5 Monitor and Revoke
+- Gateway logs every intercept decision with confidence, lane, and target.
+- F-RIB logs every registration, withdrawal, degradation, and restoration.
+- If a fabric exhibits abnormal behavior (registering unexpected prefixes, returning
+  inconsistent confidence scores), the gateway can withdraw its routes.
+- Future: anomaly detection on audit logs to flag privilege escalation attempts.
+
+---
+
+## 7. Cost-Conscious Design (Prompt Caching Awareness)
+
+### Problem
+Every LLM call (Claude, OpenAI embeddings, Ollama) has cost — either monetary or
+compute. The fabric-SDK is designed to minimize these costs, but careless prompt
+construction or unnecessary embedding calls can erode the savings.
+
+### Guardrails
+
+#### 7.1 Minimize LLM Calls
+- **Three-lane routing exists to avoid Claude calls.** If a fabric can answer at
+  >=0.95 confidence, Claude is never called. If Ollama can synthesize at >=floor,
+  Claude is never called. Claude is the last resort, not the first.
+- **DNS caching** — resolved queries are cached in Redis with TTL. The same question
+  asked twice in 5 minutes does not hit the fabric twice.
+- **AIANA feedback loop** — organic memories from previous resolutions can answer
+  future queries without hitting the source fabric at all.
+
+#### 7.2 Minimize Embedding Calls
+- **Librarian model eliminates bulk embedding.** Reference docs are fetched from
+  git and matched by keyword topic index — zero embedding calls.
+- **Embeddings only for organic memory.** Only feedback loop entries (resolved
+  queries) generate embedding calls. These are small, high-signal, and infrequent.
+- **OpenAI text-embedding-3-small** — the cheapest embedding model that meets
+  quality requirements. ~$0.02/1M tokens.
+
+#### 7.3 Prompt Structure for Efficiency
+When Ollama synthesis is added:
+- **Static content first** — system instructions, library context, then user query.
+  This enables prompt caching at the Ollama level.
+- **Truncation at 4000 chars** — the AIANA feedback loop truncates large contexts
+  before indexing. This prevents context window bloat in future recall.
+- **Library file cap at 6 files / 8000 chars each** — prevents runaway context
+  from large doc sets.
+
+---
+
+## 8. Anti-Patterns (Things We Don't Do)
 
 | Anti-Pattern | Why Not | What Instead |
 |---|---|---|
@@ -158,6 +294,12 @@ or misinterprets could cause real damage.
 | Write access in default ClusterRoles | Blast radius of hallucination | Read-only by default, write needs ADR |
 | Vibe-coding new fabrics | Inconsistent behavior, no spec to validate against | Spec → design → implement → test |
 | Git clone of large repos on demand | Timeout, disk, network | GitHub raw API for source code |
+| Shared credentials across fabrics | Compromise one = compromise all | Unique session tokens per fabric |
+| Self-defined permissions | Privilege escalation vector | Independent policy decision point (firewall) |
+| LLM-interpreted routing decisions | Prompt injection risk | Structured data matching (regex, keywords) |
+| Persistent elevated access | Attack amplification | Short-lived tokens, TTL-based sessions |
+| Dynamic content first in prompts | Cache miss on every call, wasted compute | Static content first, dynamic last |
+| Embedding calls for reference docs | Cost scales with corpus size | Topic index + git fetch = zero embedding cost |
 
 ---
 
@@ -167,3 +309,12 @@ All fabric development and deployment follows these guardrails effective immedia
 New fabrics (proxmox, tailscale, cloudflare, etc.) must be specced before implementation.
 The librarian model is the standard for reference knowledge. Agentic storage safety
 principles (immutable versioning, sandboxing, intent validation) are non-negotiable.
+
+The secure agent architecture principles (DevSecOps lifecycle, nonhuman identity,
+human-in-the-loop escalation) apply to every fabric. Privilege escalation prevention
+(least privilege, independent policy enforcement, prompt injection defense) is
+foundational — not aspirational.
+
+Cost-conscious design is a first-class concern: minimize Claude calls via three-lane
+routing, minimize embedding calls via the librarian model, structure prompts for
+caching efficiency.
