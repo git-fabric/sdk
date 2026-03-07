@@ -8,7 +8,7 @@ import { logger } from '../core/logger.js';
 
 // Default prompt injection patterns — extend via config
 const DEFAULT_INJECTION_PATTERNS = [
-  /ignore\s+(previous|prior|above|all)\s+instructions?/i,
+  /ignore\s+(all\s+)?(previous|prior|above)\s+instructions?/i,
   /forget\s+(everything|all|your)\s+(previous|prior|above)/i,
   /you\s+are\s+now\s+(a\s+)?(different|new|unrestricted)/i,
   /jailbreak/i,
@@ -126,10 +126,12 @@ export class Firewall {
     const rejected: string[]              = [];
     const reasons: Record<string, string> = {};
 
-    // Derive allowed domain from fabric_id: "fabric-k8s" → "fabric.k8s"
-    const allowedDomain = fabric_id
-      ? `fabric.${fabric_id.replace(/^fabric-/, '')}`
-      : undefined;
+    // ADR-003 §3.2: Domain isolation — all prefixes in a registration must
+    // share the same fabric.{domain} root. A single fabric cannot claim
+    // prefixes across multiple domains (e.g., both fabric.k8s.* and fabric.proxmox.*).
+    // The domain is derived from the prefixes themselves, not the fabric_id,
+    // since naming doesn't always match (fabric-aiana owns fabric.memory.*).
+    let claimedDomain: string | undefined;
 
     for (const prefix of prefixes) {
       // Must be in fabric.* namespace
@@ -144,12 +146,16 @@ export class Firewall {
         reasons[prefix] = `${prefix} is reserved`;
         continue;
       }
-      // ADR-003 §3.2: Domain isolation — each fabric can only advertise
-      // prefixes within its own domain. fabric-k8s → fabric.k8s.*
-      if (allowedDomain && prefix !== allowedDomain && !prefix.startsWith(allowedDomain + '.')) {
+      // Extract domain root: "fabric.k8s.pods" → "fabric.k8s"
+      const parts = prefix.split('.');
+      const domain = parts.length >= 2 ? `${parts[0]}.${parts[1]}` : prefix;
+
+      if (!claimedDomain) {
+        claimedDomain = domain;
+      } else if (domain !== claimedDomain) {
         rejected.push(prefix);
-        reasons[prefix] = `${fabric_id} can only advertise ${allowedDomain}.* prefixes`;
-        logger.warn(`[Firewall] Domain binding violation: ${fabric_id} tried to claim ${prefix}`);
+        reasons[prefix] = `${fabric_id ?? 'unknown'} cannot claim ${domain} — already claiming ${claimedDomain}`;
+        logger.warn(`[Firewall] Cross-domain violation: ${fabric_id} tried ${prefix} (domain=${domain}) while claiming ${claimedDomain}`);
         continue;
       }
       valid.push(prefix);
