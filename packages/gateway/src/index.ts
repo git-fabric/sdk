@@ -69,7 +69,7 @@ export async function start(configPath?: string): Promise<void> {
 
   await server.listen({ port: config.port, host: '0.0.0.0' });
   logger.info(`[Gateway] Listening on port ${config.port}`);
-  logger.info('[Gateway] Endpoints: /health /frib /register /keepalive /withdraw /dns/resolve /intercept /audit');
+  logger.info('[Gateway] Endpoints: /health /frib /register /keepalive /withdraw /dns/resolve /intercept /audit /metrics');
 
   // ── Graceful shutdown ────────────────────────────────────────────
   const shutdown = async (signal: string) => {

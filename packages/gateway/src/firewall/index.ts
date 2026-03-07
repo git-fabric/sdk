@@ -114,11 +114,22 @@ export class Firewall {
   }
 
   // ─── Registration-time prefix guard ───────────────────────────
+  // ADR-003 §6.2: Independent policy decision point — fabrics cannot
+  // self-define what prefixes they advertise. The firewall validates
+  // that prefixes match the fabric's domain binding.
 
-  validatePrefixes(prefixes: string[]): { valid: string[]; rejected: string[]; reasons: Record<string, string> } {
+  validatePrefixes(
+    prefixes: string[],
+    fabric_id?: string,
+  ): { valid: string[]; rejected: string[]; reasons: Record<string, string> } {
     const valid: string[]                 = [];
     const rejected: string[]              = [];
     const reasons: Record<string, string> = {};
+
+    // Derive allowed domain from fabric_id: "fabric-k8s" → "fabric.k8s"
+    const allowedDomain = fabric_id
+      ? `fabric.${fabric_id.replace(/^fabric-/, '')}`
+      : undefined;
 
     for (const prefix of prefixes) {
       // Must be in fabric.* namespace
@@ -131,6 +142,14 @@ export class Firewall {
       if (this.blockedPrefixes.includes(prefix)) {
         rejected.push(prefix);
         reasons[prefix] = `${prefix} is reserved`;
+        continue;
+      }
+      // ADR-003 §3.2: Domain isolation — each fabric can only advertise
+      // prefixes within its own domain. fabric-k8s → fabric.k8s.*
+      if (allowedDomain && prefix !== allowedDomain && !prefix.startsWith(allowedDomain + '.')) {
+        rejected.push(prefix);
+        reasons[prefix] = `${fabric_id} can only advertise ${allowedDomain}.* prefixes`;
+        logger.warn(`[Firewall] Domain binding violation: ${fabric_id} tried to claim ${prefix}`);
         continue;
       }
       valid.push(prefix);

@@ -55,9 +55,13 @@ export async function createServer(
   app.post('/register', async (req, reply) => {
     const body = req.body as FabricRegistration;
 
-    // Firewall: validate all route prefixes
-    const prefixCheck = firewall.validatePrefixes(body.routes?.map(r => r.prefix) ?? []);
+    // Firewall: validate all route prefixes (ADR-003 §6.2 — fabric-ID prefix binding)
+    const prefixCheck = firewall.validatePrefixes(
+      body.routes?.map(r => r.prefix) ?? [],
+      body.fabric_id,
+    );
     if (prefixCheck.rejected.length > 0) {
+      logger.warn(`[Gateway] Registration rejected prefixes for ${body.fabric_id}: ${prefixCheck.rejected.join(', ')}`);
       return reply.code(400).send({
         error:   'Invalid route prefixes',
         rejected: prefixCheck.rejected,
@@ -134,7 +138,7 @@ export async function createServer(
     }
 
     // Re-register with new routes (upsert)
-    const prefixCheck = firewall.validatePrefixes(body.routes?.map(r => r.prefix) ?? []);
+    const prefixCheck = firewall.validatePrefixes(body.routes?.map(r => r.prefix) ?? [], body.fabric_id);
     const validRoutes = body.routes.filter(r => prefixCheck.valid.includes(r.prefix));
 
     // Patch the existing session's routes
@@ -214,6 +218,80 @@ export async function createServer(
     const { limit = '100' } = req.query as { limit?: string };
     const entries = await frib.getAuditLog(parseInt(limit, 10));
     return { entries, count: entries.length };
+  });
+
+  // ─── Metrics (ADR-003 §7) ─────────────────────────────────────
+  // Operational visibility: intercept counts by lane, cache hits,
+  // registration events, AIANA indexing — derived from audit log.
+
+  app.get('/metrics', async () => {
+    const entries = await frib.getAuditLog(10000);
+
+    // Count intercepts by lane
+    const laneCounters: Record<string, number> = { deterministic: 0, 'local-llm': 0, claude: 0 };
+    let totalIntercepts = 0;
+    let dnsResolves = 0;
+    let registrations = 0;
+    let withdrawals = 0;
+    let firewallBlocks = 0;
+
+    for (const entry of entries) {
+      switch (entry.event_type) {
+        case 'intercept':
+          totalIntercepts++;
+          if (entry.routing_lane && entry.routing_lane in laneCounters) {
+            laneCounters[entry.routing_lane]++;
+          }
+          break;
+        case 'dns_resolve':
+          dnsResolves++;
+          break;
+        case 'register':
+          registrations++;
+          break;
+        case 'withdraw':
+          withdrawals++;
+          break;
+        case 'firewall':
+          firewallBlocks++;
+          break;
+      }
+    }
+
+    // Cache hit ratio from DNS resolves with 'cache' source
+    const cacheHits = entries.filter(
+      e => e.event_type === 'dns_resolve' && e.metadata?.source === 'cache'
+    ).length;
+    const cacheHitRatio = dnsResolves > 0 ? cacheHits / dnsResolves : 0;
+
+    // Claude avoidance rate — % of intercepts NOT going to Claude
+    const claudeAvoidanceRate = totalIntercepts > 0
+      ? (totalIntercepts - laneCounters.claude) / totalIntercepts
+      : 1;
+
+    const sessions = await frib.allSessions();
+    const routes = await frib.allRoutes();
+
+    return {
+      intercepts: {
+        total: totalIntercepts,
+        by_lane: laneCounters,
+        claude_avoidance_rate: parseFloat(claudeAvoidanceRate.toFixed(4)),
+      },
+      dns: {
+        resolves: dnsResolves,
+        cache_hit_ratio: parseFloat(cacheHitRatio.toFixed(4)),
+      },
+      registrations: { total: registrations, withdrawals },
+      firewall: { blocks: firewallBlocks },
+      fabric_health: {
+        active: sessions.filter(s => s.status === 'active').length,
+        degraded: sessions.filter(s => s.status === 'degraded').length,
+        total_routes: routes.length,
+      },
+      audit_entries_total: entries.length,
+      timestamp: Math.floor(Date.now() / 1000),
+    };
   });
 
   return app;

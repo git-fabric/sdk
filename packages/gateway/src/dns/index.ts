@@ -37,6 +37,15 @@ export class DNSResolver {
     const cached = await this.fromCache(queryHash);
     if (cached) {
       logger.debug(`[DNS] Cache hit hash=${queryHash} requestor=${query.requestor_fabric_id}`);
+      await this.frib.audit({
+        audit_id:     queryHash,
+        timestamp:    Math.floor(Date.now() / 1000),
+        event_type:   'dns_resolve',
+        fabric_id:    cached.results[0]?.fabric_id,
+        routing_lane: cached.routing_lane,
+        decision:     'cache_hit',
+        metadata:     { source: 'cache' },
+      });
       return { ...cached, query_hash: queryHash };
     }
 
@@ -75,6 +84,7 @@ export class DNSResolver {
         prefix:       primary.prefix,
         routing_lane: response.routing_lane,
         decision:     `resolved via ${primary.fabric_id} confidence=${result.confidence.toFixed(2)}`,
+        metadata:     { source: 'fabric' },
       });
       return response;
     }
