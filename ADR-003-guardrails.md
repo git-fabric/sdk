@@ -303,6 +303,59 @@ When Ollama synthesis is added:
 
 ---
 
+## 9. Change Order Process
+
+### Problem
+Direct pushes to main, untested deployments, and undocumented changes undermine every
+guardrail above. During enforcement testing (2026-03-07), six issues were discovered —
+several caused by skipping process (overwriting image tags, pushing directly to main).
+
+### Rules
+
+1. **Document first** — every change gets an issue ID and entry in the change log
+   before code is written. Problem, fix, affected files.
+2. **Branch and PR** — all code changes go through a branch (`fix/<id>` or `feat/<id>`)
+   and a pull request. No direct pushes to main.
+3. **Human approves** — PRs require human review before merge. The human can approve
+   via GitHub UI or by explicit instruction.
+4. **Build correctly** — always `--platform linux/amd64` for k3s cluster. Never overwrite
+   image tags. New changes get new tags.
+5. **Test before deploy** — run the enforcement test suite and verify all checks pass
+   before declaring a change complete.
+6. **Deploy via Helm** — `helm upgrade` with explicit `--set image.tag=<new>`. No
+   `kubectl apply` without a chart. No `kubectl set image` shortcuts.
+
+### Enforcement Test Results (2026-03-07, gateway 0.1.7)
+
+26/26 checks passing:
+
+| Category | Tests | Result |
+|---|---|---|
+| Gateway health & registration | 3 | PASS |
+| F-RIB state (sessions + routes) | 4 | PASS |
+| Prefix binding (cross-domain, blocked, namespace escape) | 5 | PASS |
+| Firewall (injection, PII scrubbing) | 2 | PASS |
+| Routing lanes (deterministic, local-llm, claude) | 5 | PASS |
+| AIANA feedback loop | 1 | PASS |
+| Metrics endpoint | 3 | PASS |
+| Persistent audit log | 3 | PASS |
+
+Metrics snapshot: **84.9% Claude avoidance rate**, 53 intercepts (19 deterministic,
+26 local-llm, 8 claude), 13.6% DNS cache hit ratio, 148 audit entries.
+
+### Issues Discovered During Testing
+
+| ID | Status | Description |
+|---|---|---|
+| DNS-001 | OPEN | Route TTL expires but session survives — routes disappear silently |
+| DNS-002 | OPEN | Stale DNS cache survives gateway restart — wrong routing lane |
+| BUILD-001 | OPEN | No build script — easy to forget `--platform linux/amd64` |
+| FW-001 | FIXED | Prefix binding derived domain from fabric_id — too strict |
+| FW-002 | FIXED | Injection regex missed "ignore all previous instructions" |
+| BUILD-002 | FIXED | Image tag overwritten — node cached stale image |
+
+---
+
 ## Decision
 
 All fabric development and deployment follows these guardrails effective immediately.
@@ -318,3 +371,6 @@ foundational — not aspirational.
 Cost-conscious design is a first-class concern: minimize Claude calls via three-lane
 routing, minimize embedding calls via the librarian model, structure prompts for
 caching efficiency.
+
+The change order process (§9) is mandatory for all code changes. No direct pushes,
+no undocumented changes, no deploying without a PR and human approval.
