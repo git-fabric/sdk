@@ -2,7 +2,12 @@
 // L4 Interceptor — scores incoming requests and selects routing lane
 // Sits between firewall (L2) and DNS resolver (L4 unicast)
 // ADR-001 §3, ADR-002 §12
+//
+// AIANA feedback loop: after a successful resolution from any fabric,
+// the query + context is indexed into AIANA's memory. Next time a similar
+// query arrives, AIANA can answer it directly — escalation rate → zero.
 
+import axios from 'axios';
 import type {
   InterceptorResult, DNSQuery, DNSResponse,
   GatewayConfig, RoutingLane
@@ -66,6 +71,13 @@ export class Interceptor {
 
     logger.info(`[Interceptor] audit=${audit_id} lane=${lane} confidence=${confidence.toFixed(2)} target=${target_fabric ?? 'claude'}`);
 
+    // 3. AIANA feedback loop — index successful resolutions into memory
+    if (lane !== 'claude' && context && target_fabric && target_fabric !== 'fabric-aiana') {
+      this.indexToAiana(params.query_text, context, target_fabric, params.domain_hint, confidence).catch(err => {
+        logger.warn(`[Interceptor] AIANA indexing failed: ${(err as Error).message}`);
+      });
+    }
+
     return {
       lane,
       confidence,
@@ -73,6 +85,50 @@ export class Interceptor {
       target_fabric,
       audit_id,
     };
+  }
+
+  // ─── AIANA feedback loop ────────────────────────────────────────
+  // Fire-and-forget: index the query+context into AIANA's memory store
+  // so future queries can be answered from memory instead of hitting the
+  // source fabric. This is what makes escalation rate trend toward zero.
+
+  private async indexToAiana(
+    queryText: string,
+    context: string,
+    sourceFabric: string,
+    domainHint: string | undefined,
+    confidence: number,
+  ): Promise<void> {
+    // Find AIANA's MCP endpoint from the F-RIB
+    const aianaSession = await this.frib.getSession('fabric-aiana');
+    if (!aianaSession?.mcp_endpoint) return;
+
+    // Build a concise memory entry
+    const memoryContent = [
+      `Query: ${queryText}`,
+      domainHint ? `Domain: ${domainHint}` : '',
+      `Source: ${sourceFabric} (confidence: ${confidence.toFixed(2)})`,
+      `Timestamp: ${new Date().toISOString()}`,
+      '',
+      context.length > 4000 ? context.slice(0, 4000) + '\n...[truncated]' : context,
+    ].filter(Boolean).join('\n');
+
+    const endpoint = aianaSession.mcp_endpoint.replace(/\/mcp$/, '');
+
+    await axios.post(
+      `${endpoint}/tools/call`,
+      {
+        name: 'aiana_memory_add',
+        arguments: {
+          content: memoryContent,
+          memoryType: 'insight',
+          project: domainHint ?? sourceFabric,
+        },
+      },
+      { timeout: 5000 }
+    );
+
+    logger.info(`[Interceptor] Indexed to AIANA: domain=${domainHint} source=${sourceFabric}`);
   }
 
   private auditId(): string {

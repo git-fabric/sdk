@@ -123,7 +123,7 @@ export class FRIB {
     }
 
     const now  = Math.floor(Date.now() / 1000);
-    const healthRatio = workerPool.healthy / Math.max(workerPool.total, 1);
+    const healthRatio = workerPool.total === 0 ? 1 : workerPool.healthy / workerPool.total;
 
     session.last_keepalive = now;
     session.status = healthRatio >= 0.5 ? 'active' : 'degraded';

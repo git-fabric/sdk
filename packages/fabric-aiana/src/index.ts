@@ -67,7 +67,7 @@ async function main(): Promise<void> {
       fabric_id: 'fabric-aiana',
       as_number: 65005,
       version: '0.1.0',
-      mcp_endpoint: `http://${config.host}:${config.port}/mcp`,
+      mcp_endpoint: `http://${process.env.POD_IP || config.host}:${config.port}/mcp`,
       supervisor: 'standalone',
       tailscale_node: 'fabric-aiana',
       ollama_endpoint: config.ollamaEndpoint,
