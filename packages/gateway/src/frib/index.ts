@@ -134,6 +134,31 @@ export class FRIB {
       'EX', 3600
     );
 
+    // DNS-001: Re-insert routes that expired from Redis while the session survived.
+    // Routes have a shorter TTL (~360s) than sessions (3600s). After a gateway restart
+    // or prolonged period, routes may expire even though the fabric is still alive.
+    // Self-healing: check each advertised prefix and re-insert if missing.
+    for (const prefix of session.routes_advertised) {
+      const existing = await this.getByPrefix(prefix);
+      if (!existing) {
+        const entry: FRIBEntry = {
+          fabric_id,
+          as_number:        session.as_number,
+          mcp_endpoint:     session.mcp_endpoint,
+          ollama_endpoint:  session.ollama_endpoint,
+          local_pref:       healthRatio >= 0.5 ? 100 : 50,
+          confidence_floor: 0.7,
+          last_seen:        now,
+          worker_health:    healthRatio >= 0.5 ? 'healthy' : 'degraded',
+          ttl:              300,
+          prefix,
+          description:      '',
+        };
+        await this.redis.set(`${FRIB_PREFIX}${prefix}`, JSON.stringify(entry), 'EX', 360);
+        logger.info(`[F-RIB] Re-inserted expired route prefix=${prefix} fabric=${fabric_id}`);
+      }
+    }
+
     // Update local_pref on routes if worker health changed
     if (healthRatio < 0.5) {
       await this.degradeRoutes(fabric_id, session.routes_advertised);

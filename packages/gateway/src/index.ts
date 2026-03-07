@@ -45,6 +45,15 @@ export async function start(configPath?: string): Promise<void> {
     setTimeout(() => reject(new Error('Redis connection timeout (30s)')), 30000);
   });
 
+  // DNS-002: Flush stale DNS cache on startup. Cached results from a previous
+  // gateway session may reference expired fabric endpoints or stale confidence
+  // scores. Fresh start = fresh cache. Sessions and routes survive via Redis.
+  const flushed = await redis.keys('fabric:dns:*');
+  if (flushed.length > 0) {
+    await redis.del(...flushed);
+    logger.info(`[DNS] Flushed ${flushed.length} stale cache entries on startup`);
+  }
+
   // ── Layer instantiation (bottom → top, OSI L2 → L4) ─────────────
   const frib        = new FRIB(redis);
   const firewall    = new Firewall(config.firewall);
