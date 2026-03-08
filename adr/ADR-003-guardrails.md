@@ -356,6 +356,90 @@ Metrics snapshot: **84.9% Claude avoidance rate**, 53 intercepts (19 determinist
 
 ---
 
+## 10. Supply Chain Hardening: Images & Helm Charts
+
+### Problem
+The fabric ecosystem runs on a k3s cluster with real infrastructure access. Every
+container image and Helm chart in the supply chain is an attack surface. Using
+unvetted images, community charts without security review, or "latest" tags creates
+risk that undermines every other guardrail in this ADR.
+
+### Decision
+**Use hardened Helm charts and container images wherever and whenever possible.**
+This is not optional — it applies to every component in the cluster, not just
+fabric-specific services.
+
+### Rules
+
+#### 10.1 Hardened Helm Charts First
+- **Prefer official or hardened Helm charts** over raw manifests or custom YAML.
+  Helm charts from project maintainers (e.g., `argo/argo-cd`, `bitnami/redis`,
+  `jetstack/cert-manager`) are tested, maintained, and patched upstream.
+- **Never deploy infrastructure via `kubectl apply -f` from a URL.** Always use
+  a Helm chart managed through the gitops repo with pinned versions.
+- **All Helm chart versions are pinned** — no `*` or floating ranges. Chart
+  upgrades are explicit, reviewed, and tested before merging.
+- **Values files live in the gitops repo** — `fabric-gitops/infra/<component>/values.yaml`.
+  This is the source of truth for chart configuration.
+
+#### 10.2 Hardened Container Images
+- **Prefer distroless or minimal base images** — Alpine, distroless, or
+  vendor-hardened images over full Debian/Ubuntu.
+- **Never use `:latest` tags in production manifests.** All image references
+  use immutable tags (semver or SHA digest).
+- **Scan images for vulnerabilities** — Trivy or equivalent before deployment.
+  Critical/High CVEs block deployment.
+- **Use private registry mirrors** when available to reduce external dependency
+  and ensure availability.
+
+#### 10.3 Infrastructure Components (Hardened Chart Registry)
+
+All cluster infrastructure MUST use hardened Helm charts:
+
+| Component | Chart | Why |
+|-----------|-------|-----|
+| ArgoCD | `argo/argo-cd` | GitOps engine — HA mode, RBAC, metrics, SSO-ready |
+| Redis | `bitnami/redis` | Auth, persistence, security contexts, network policies |
+| Grafana | `grafana/grafana` | Hardened chart — RBAC, persistence, datasource provisioning |
+| Longhorn | `longhorn/longhorn` | Official chart, CSI driver lifecycle |
+| MetalLB | `metallb/metallb` | Official chart, L2/BGP configuration |
+| cert-manager | `jetstack/cert-manager` | Official chart, CRD lifecycle, webhook security |
+| Sealed Secrets | `bitnami-labs/sealed-secrets` | Already Helm-managed |
+| Prometheus Stack | `prometheus-community/kube-prometheus-stack` | Already Helm-managed |
+| Traefik | `traefik/traefik` | Already Helm-managed (k3s bundled) |
+| Argo Rollouts | `argo/argo-rollouts` | Canary/blue-green for zero-downtime deploys |
+| Reloader | `stakater/reloader` | Auto-restart on ConfigMap/Secret changes |
+| Cluster Autoscaler | `autoscaler/cluster-autoscaler` | When Proxmox provider is available |
+| Descheduler | `kubernetes-sigs/descheduler` | Pod rebalancing across nodes |
+
+#### 10.4 Fabric App Images
+Fabric-specific images (`ghcr.io/git-fabric/*`) follow the same rules:
+- Built `--platform linux/amd64` for the k3s cluster
+- Base image: `node:22-alpine` (not `node:22`)
+- Multi-stage builds — build dependencies never ship in the final image
+- No dev dependencies in production (`npm ci --omit=dev` or equivalent)
+- Image tags are immutable — `0.1.1`, `0.3.1`, never overwritten
+
+#### 10.5 Chart Upgrade Process
+1. Check upstream release notes for breaking changes
+2. Update chart version in `fabric-gitops` values
+3. PR with diff of rendered manifests (`helm template` before and after)
+4. Human review and approve
+5. ArgoCD syncs the change
+
+#### 10.6 Anti-Patterns
+
+| Anti-Pattern | Why Not | What Instead |
+|---|---|---|
+| `kubectl apply -f https://raw.githubusercontent.com/...` | No version pinning, no review | Helm chart in gitops repo |
+| `:latest` image tags | Non-deterministic, cache pollution | Pinned semver or SHA digest |
+| Custom YAML for infrastructure | Maintenance burden, no upstream patches | Official Helm charts |
+| Unscanned images | Unknown CVE exposure | Trivy scan before deploy |
+| Helm charts without values files in git | Configuration drift | Values in `fabric-gitops` |
+| Direct `helm install` on the cluster | No gitops trail | ArgoCD manages all Helm releases |
+
+---
+
 ## Decision
 
 All fabric development and deployment follows these guardrails effective immediately.
@@ -371,6 +455,9 @@ foundational — not aspirational.
 Cost-conscious design is a first-class concern: minimize Claude calls via three-lane
 routing, minimize embedding calls via the librarian model, structure prompts for
 caching efficiency.
+
+Supply chain hardening (§10) is mandatory: hardened Helm charts for all infrastructure,
+hardened container images, pinned versions, vulnerability scanning. No exceptions.
 
 The change order process (§9) is mandatory for all code changes. No direct pushes,
 no undocumented changes, no deploying without a PR and human approval.
