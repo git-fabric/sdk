@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/banner.svg" alt="sdk: BGP-style routing for fabric agents: local first, Claude last" width="100%"></p>
+
 # Fabric-SDK
 
 **Stop paying Claude to answer questions your own systems already know.**
@@ -211,3 +213,8 @@ All changes follow the [development compliance process](adr/ai/AI-ADR-011-develo
 ## License
 
 MIT
+
+<!-- org-footer -->
+---
+
+<p align="center"><sub>Part of <a href="https://github.com/git-fabric">git-fabric</a> · composable fabric apps for Git-native infrastructure · built by <a href="https://github.com/ry-ops">ry-ops</a></sub></p>
